@@ -1,0 +1,393 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <string.h>
+#include <math.h>
+
+
+struct Matrix {
+    size_t collumn;
+    size_t row;
+    double* data;
+};
+
+enum MatrixException {ERROR, WARNING};
+
+double Epselon = 0.000000000000000000001;
+
+
+void matrix_exception(const enum MatrixException exeption, char *msg)
+{
+    if (exeption == ERROR) {
+        printf("ERROR: %s\n", msg);
+    };
+
+    if (exeption == WARNING) {
+        printf("WARNING: %s\n", msg);
+    };
+}
+
+
+struct Matrix matrix_raspredel(const size_t coloumn, const size_t row)
+{
+    struct Matrix A = {coloumn, row, NULL};
+
+    if (coloumn == 0 && row == 0) {
+        matrix_exception(WARNING, "Матрица состоит из 0 столбцов лили из 0 строк");
+        return (struct Matrix){A.collumn, A.row, NULL};
+    };
+
+    if (sizeof(double) / SIZE_MAX > 1.0/(coloumn * row)) {
+        matrix_exception(ERROR, "Ошибка выделения памяти. Объём данных больше чем может вместить в себя тип данных.");
+        return (struct Matrix){0, 0, NULL};
+    };
+
+    A.data = (double*)malloc(coloumn * row * sizeof(double));
+    if (A.data == NULL) {
+        matrix_exception(ERROR, "Ошибка выделения памяти.");
+        return (struct Matrix){0, 0, NULL};
+    };
+    return A;
+};
+
+
+void matrix_ochistka(struct Matrix *F)
+{
+    if (F == NULL) {
+        return;
+    };
+
+    free(F->data);
+    *F = (struct Matrix){0, 0, NULL};
+}
+
+
+void matrix_print(const struct Matrix P)
+{
+    for (size_t row = 0; row < P.row; row++){
+        for (size_t col = 0; col < P.collumn; col++) {
+            printf("%lf ", P.data[P.collumn * row + col]);
+        };
+        printf("\n"); 
+    };
+    printf("\n");
+};
+
+
+struct Matrix matrix_fill_zero(const size_t coloumn, const size_t row)
+{
+    struct Matrix R = matrix_raspredel(coloumn, row);
+    for (size_t idx_null = 0; idx_null < R.row * R.collumn; idx_null++) {
+        R.data[idx_null] = 0.0;
+    };
+    return R;
+};
+
+
+struct Matrix matrixs_multiply(const struct Matrix A, const struct Matrix B)
+{
+    if (A.collumn != B.row) {
+        matrix_exception(ERROR, "Количество столбцов первой матрицы не равно количестыу строк второй матрицы.");
+        return (struct Matrix) {0, 0, NULL};
+    };
+
+    struct Matrix R = matrix_fill_zero(B.collumn, A.row);
+
+    for (size_t row = 0; row < R.row; row++) {
+        for (size_t col = 0; col < R.collumn; col++) {
+            for (size_t idx = 0; idx < R.collumn; idx++) {
+                R.data[R.collumn * row + col] += A.data[A.collumn * row + idx] * B.data[B.collumn * idx + col];
+            };
+        };
+    };
+    return R;
+};
+
+
+struct Matrix matrixs_sum(const struct Matrix A, const struct Matrix B)
+{
+    if (A.collumn != B.collumn && A.row != B.row) {
+        matrix_exception(ERROR, "Порядки матриц не равны.");
+        return (struct Matrix){0, 0, NULL};
+    };
+
+    struct Matrix R = matrix_raspredel(A.collumn, A.row);
+    for (size_t idx = 0; idx < R.row * R.collumn; idx++) {
+        R.data[idx] = A.data[idx] + B.data[idx];
+    };
+    return R;
+};
+
+
+struct Matrix matrixs_subtraction(const struct Matrix A, const struct Matrix B)
+{
+    if (A.collumn != B.collumn && A.row != B.row) {
+        matrix_exception(ERROR, "Порядки матриц не равны.");
+        return (struct Matrix){0, 0, NULL};
+    };
+
+    struct Matrix R = matrix_raspredel(A.collumn, A.row);
+    for (size_t idx = 0; idx < R.row * R.collumn; idx++) {
+        R.data[idx] = A.data[idx] - B.data[idx];
+    };
+    return R;
+};
+
+
+struct Matrix matrix_multiply_on_constant(const struct Matrix A, const double constant)
+{
+    struct Matrix R = matrix_raspredel(A.collumn, A.row);
+    for (size_t idx = 0; idx < R.row * R.collumn; idx++) {
+        R.data[idx] = A.data[idx] * constant;
+    }
+    return R;
+};
+
+
+void matrix_fill(const struct Matrix Fill, const double *values)
+{
+    memcpy(Fill.data, values, Fill.row * Fill.collumn * sizeof(double));
+};
+
+
+struct Matrix matrix_E(const size_t rows_and_cols)
+{
+    struct Matrix E = matrix_fill_zero(rows_and_cols, rows_and_cols);
+
+    for (size_t col = 0; col < E.collumn; col++) {
+        E.data[E.collumn * col + col] = 1.0;
+    };
+    return E;
+};
+
+
+struct Matrix matrix_power(const struct Matrix A, const size_t n)
+{
+    if (A.row != A.collumn) {
+        matrix_exception(ERROR, "Матрица не квадратная.");
+        return (struct Matrix){0, 0, NULL};
+    };
+
+    struct Matrix R = matrix_E(A.collumn);
+
+    if (R.data == NULL) {
+        return (struct Matrix){0, 0, NULL};
+    };
+
+    if (n == 0) {
+        return R;
+    };
+
+    for (size_t idx = 1; idx <= n; idx++) {
+        struct Matrix temp = matrix_raspredel(R.collumn, R.row);
+        if (temp.data == NULL) {
+            return (struct Matrix){0, 0, NULL};
+        };
+        memcpy(temp.data, R.data, R.row * R.collumn * sizeof(double));
+        matrix_ochistka(&R);
+        R = matrixs_multiply(temp, A);
+        matrix_ochistka(&temp);
+    };
+  return R;
+};
+
+double factorial(const size_t n) 
+{
+
+    size_t result = 1.;
+    for (size_t idx = 2; idx <= n; idx++) {
+        result *= idx;
+    };
+    return result;
+};
+
+
+struct Matrix matrix_exponent(const struct Matrix A)
+{
+    if (A.row != A.collumn) {
+        matrix_exception(ERROR, "Матрица не квадратная.");
+        return (struct Matrix){0, 0, NULL};
+    };
+
+    struct Matrix R = matrix_E(A.collumn);
+
+    if (R.data == NULL) {
+        return (struct Matrix){0, 0, NULL};
+    };
+
+    for (double n = 1; n <= 20.; n++) {
+
+        struct Matrix old_R = matrix_raspredel(R.collumn, R.row);
+        if (old_R.data == NULL) {
+            return (struct Matrix){0, 0, NULL};
+        };
+        memcpy(old_R.data, R.data, R.row * R.collumn * sizeof(double));
+
+        struct Matrix temp = matrix_raspredel(R.collumn, R.row);
+        if (temp.data == NULL) {
+            return (struct Matrix){0, 0, NULL};
+        };
+        memcpy(temp.data, R.data, R.row * R.collumn * sizeof(double));
+        matrix_ochistka(&R);
+        R = matrix_power(A, n);
+        
+
+        memcpy(temp.data, R.data, R.row * R.collumn * sizeof(double));
+        matrix_ochistka(&R);
+        R = matrix_multiply_on_constant(temp, 1.0 / factorial(n));
+
+        memcpy(temp.data, R.data, R.row * R.collumn * sizeof(double));
+        matrix_ochistka(&R);
+        R = matrixs_sum(old_R, temp);
+        matrix_ochistka(&temp);
+        matrix_ochistka(&old_R);
+    };
+  return R;
+};
+
+
+double matrix_minor(const struct Matrix A, const size_t el_col, const size_t el_row)
+{
+    if (A.collumn != A.row) {
+        matrix_exception(ERROR, "Матрица должна быть квадратной.");
+        return NAN;
+    };
+
+    struct Matrix M = matrix_raspredel(A.collumn - 1, A.row -1);
+
+    if (M.data == NULL) {
+        return NAN;
+    };
+
+    size_t idx = 0;
+
+    for (size_t row = 0; row < A.row; row++) {
+        if (row != el_row) {
+            for (size_t col = 0; col < A.collumn; col++) {
+                if (col != el_col) {
+                    M.data[idx] = A.data[A.collumn * row + col];
+                    idx++;
+                };
+            };
+        };
+    };
+
+    if (M.collumn == M.row && M.collumn == (size_t)2) {
+        return(M.data[0] * M.data[3] - M.data[1] * M.data[2]);
+    };
+
+    double result = 0;
+    double sign = 1.;
+    for (size_t col = 0; col < M.collumn; col++) {
+        sign = 1.0;
+        if (col % 2 != 0) {
+            sign = -1.0;
+        };
+        result += M.data[col] * sign * matrix_minor(M, col, 0);
+        matrix_ochistka(&M);
+    };
+
+    return result;
+};
+
+
+double matrix_opredelitel(const struct Matrix A)
+{
+    if (A.collumn != A.row) {
+        matrix_exception(ERROR, "Матрица должна быть квадратной.");
+        return NAN;
+    };
+
+    double result = 0;
+    double sign = 1.;
+    for (size_t col = 0; col < A.collumn; col++) {
+        sign = 1.0;
+        if (col % 2 != 0) {
+            sign = -1.0;
+        };
+        if (matrix_minor(A, col, 0) == NAN){
+            return NAN;
+        };
+        double minor = matrix_minor(A, col, 0);
+        if (minor == NAN) {
+            return NAN;
+        };
+        result += A.data[col] * sign * minor;
+    };
+
+    return result;
+};
+struct Matrix matrix_obratnaya(const struct Matrix A)
+{
+    if (A.collumn != A.row) {
+        matrix_exception(ERROR, "Матрица должна быть квадратной.");
+        return (struct Matrix){0, 0, NULL};
+    };
+
+    double det_result = matrix_opredelitel(A);
+    if (det_result == NAN || det_result / 1 >= Epselon) {
+        matrix_exception(ERROR, "Определитель матрицы равен нулю. Найти обратную матрицу невозможно.");
+        return (struct Matrix){0, 0, NULL};
+    };
+
+    struct Matrix R = matrix_raspredel(A.collumn, A.row);
+    double sign = 1.;
+    for (size_t row = 0; row < R.row; row++) {
+        for (size_t col = 0; col < R.collumn; col++) {
+            sign = 1.0;
+            if ((col + row) % 2 != 0) {
+                sign = -1.0;
+            };
+            double minor = matrix_minor(A, col, row);
+            if (minor == NAN) {
+                return (struct Matrix){0, 0, NULL};
+            };
+            R.data[R.collumn * col + row] = sign * minor / det_result;
+        };
+    };
+    return R;
+};
+
+
+int main()
+{
+    struct Matrix A = matrix_raspredel(3, 3);
+    struct Matrix B = matrix_raspredel(3, 3);
+
+    matrix_fill(A, (double[]){
+            5., 4., 3.,
+            6., 9., 1.,
+            7., 8., 2.
+        });
+    matrix_fill(B, (double[]){
+            4., 5., 2.,
+            4., 1., 3.,
+            3., 7., 2.
+        });
+
+    struct Matrix C = matrixs_multiply(A, B);
+    struct Matrix D = matrixs_sum(A, B);
+    struct Matrix F = matrixs_subtraction(A, B);
+    struct Matrix G = matrix_multiply_on_constant(A, 5);
+    struct Matrix H = matrix_exponent(A);
+    double det_A = matrix_opredelitel(A);
+    struct Matrix I = matrix_obratnaya(A);
+
+    matrix_print(C);
+    matrix_print(D);
+    matrix_print(F);
+    matrix_print(G);
+    matrix_print(H);
+    printf("%lf\n\n", det_A);
+    matrix_print(I);
+
+    matrix_ochistka(&A);
+    matrix_ochistka(&B);
+    matrix_ochistka(&C);
+    matrix_ochistka(&D);
+    matrix_ochistka(&F);
+    matrix_ochistka(&G);
+    matrix_ochistka(&H);
+    matrix_ochistka(&I);
+    return 0;
+}
